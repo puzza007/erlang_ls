@@ -2,9 +2,12 @@
 
 %% API
 -export([ find/2
+        , install/0
+        , install/1
         , store/3
         , delete/2
         , start_link/0
+        , wait_for_tables/0
         ]).
 
 %% gen_server callbacks
@@ -19,6 +22,11 @@
                 , documents
                 , references_index
                 ]).
+-define(TIMEOUT, 5000).
+
+-record(document, { uri  :: erlang_ls_uri:uri()
+                  , text :: binary()
+                  }).
 
 -type state() :: #{}.
 -type table() :: atom().
@@ -27,6 +35,25 @@
 %%==============================================================================
 %% Exported functions
 %%==============================================================================
+
+-spec install() -> ok.
+install() ->
+  {ok, [[Home]]} = init:get_argument(home),
+  Dir = filename:join([Home, ".cache", "erlang_ls"]),
+  ok = filelib:ensure_dir(filename:join([Dir, "dummy"])),
+  install(Dir).
+
+-spec install(string()) -> ok.
+install(Dir) ->
+  lager:info("Creating DB. [dir=~s]", [Dir]),
+  ok = application:set_env(mnesia, dir, Dir),
+  mnesia:create_schema([node()]),
+  application:start(mnesia),
+  mnesia:create_table( erlang_ls_documents
+                     , [ {attributes, record_info(fields, document)}
+                       , {disc_copies, []}
+                       ]),
+  application:stop(mnesia).
 
 -spec start_link() -> {ok, pid()}.
 start_link() ->
@@ -48,6 +75,14 @@ store(Table, Key, Value) ->
 delete(Table, Key) ->
   true = ets:delete(Table, Key),
   ok.
+
+-spec wait_for_tables() -> ok.
+wait_for_tables() ->
+  wait_for_tables(?TIMEOUT).
+
+-spec wait_for_tables(pos_integer()) -> ok.
+wait_for_tables(Timeout) ->
+  ok = mnesia:wait_for_tables([erlang_ls_documents], Timeout).
 
 %%==============================================================================
 %% gen_server Callback Functions

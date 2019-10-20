@@ -12,6 +12,7 @@
    , cowlib
    , lager
    , yamerl
+   , mnesia
    ]},
   {env,[]},
   {modules, []},

@@ -35,6 +35,8 @@ suite() ->
 
 -spec init_per_suite(config()) -> config().
 init_per_suite(Config) ->
+  Priv = ?config(priv_dir, Config),
+  erlang_ls_db:install(Priv),
   {ok, Started} = application:ensure_all_started(erlang_ls),
   [{started, Started}|Config].
 

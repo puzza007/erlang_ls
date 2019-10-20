@@ -26,6 +26,7 @@
 %%==============================================================================
 -spec start(normal, any()) -> {ok, pid()}.
 start(_StartType, _StartArgs) ->
+  erlang_ls_db:wait_for_tables(),
   Port = application:get_env(erlang_ls, port, ?DEFAULT_PORT),
   {ok, _} = ranch:start_listener( erlang_ls
                                 , ranch_tcp
