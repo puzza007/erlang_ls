@@ -5,5 +5,6 @@
 -spec main([any()]) -> ok.
 main([Port]) ->
   application:set_env(erlang_ls, port, list_to_integer(Port)),
+  erlang_ls_db:install(),
   application:ensure_all_started(erlang_ls),
   receive _ -> ok end.

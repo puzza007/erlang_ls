@@ -1,7 +1,8 @@
 -module(erlang_ls_db).
 
 %% API
--export([ find/2
+-export([ add/2
+        , find/2
         , install/0
         , install/1
         , store/3
@@ -24,9 +25,9 @@
                 ]).
 -define(TIMEOUT, 5000).
 
--record(document, { uri  :: erlang_ls_uri:uri()
-                  , text :: binary()
-                  }).
+-record(poi, { uri   :: erlang_ls_uri:uri()
+             , value :: erlang_ls_poi:poi()
+             }).
 
 -type state() :: #{}.
 -type table() :: atom().
@@ -39,7 +40,7 @@
 -spec install() -> ok.
 install() ->
   {ok, [[Home]]} = init:get_argument(home),
-  Dir = filename:join([Home, ".cache", "erlang_ls"]),
+  Dir = filename:join([Home, ".cache", "erlang_ls", "db"]),
   ok = filelib:ensure_dir(filename:join([Dir, "dummy"])),
   install(Dir).
 
@@ -49,8 +50,8 @@ install(Dir) ->
   ok = application:set_env(mnesia, dir, Dir),
   mnesia:create_schema([node()]),
   application:start(mnesia),
-  mnesia:create_table( erlang_ls_documents
-                     , [ {attributes, record_info(fields, document)}
+  mnesia:create_table( poi
+                     , [ {attributes, record_info(fields, poi)}
                        , {disc_copies, []}
                        ]),
   application:stop(mnesia).
@@ -71,6 +72,13 @@ store(Table, Key, Value) ->
   true = ets:insert(Table, {Key, Value}),
   ok.
 
+%% TODO: Rename into store when ready
+-spec add(erlang_ls_uri:uri(), erlang_ls_poi:poi()) -> ok.
+add(Uri, POI) ->
+  F = fun() -> mnesia:write(#poi{uri = Uri, value = POI}) end,
+  %% TODO: We probably do not need a transactions per each poi
+  mnesia:activity(transaction, F).
+
 -spec delete(table(), key()) -> ok.
 delete(Table, Key) ->
   true = ets:delete(Table, Key),
@@ -82,7 +90,8 @@ wait_for_tables() ->
 
 -spec wait_for_tables(pos_integer()) -> ok.
 wait_for_tables(Timeout) ->
-  ok = mnesia:wait_for_tables([erlang_ls_documents], Timeout).
+  %% TODO: Macro for table names
+  ok = mnesia:wait_for_tables([poi], Timeout).
 
 %%==============================================================================
 %% gen_server Callback Functions

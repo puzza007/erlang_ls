@@ -93,7 +93,9 @@ index_file(File) ->
     {ok, Text} = file:read_file(File),
     Uri        = erlang_ls_uri:uri(File),
     Document   = erlang_ls_document:create(Uri, Text),
-    ok         = index(Document)
+    ok         = index(Document),
+    #{pois    := POIs} = Document,
+    [erlang_ls_db:add(Uri, POI) || POI <- POIs]
   catch Type:Reason:St ->
       lager:error("Error indexing ~s: ~p", [File, Reason]),
       erlang:raise(Type, Reason, St)
