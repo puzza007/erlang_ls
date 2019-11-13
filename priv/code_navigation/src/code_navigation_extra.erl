@@ -8,5 +8,6 @@ do(_Config) ->
 do_2() ->
   code_navigation:function_h().
 
-do_3() ->
+-spec do_3(X, wot(bar())) -> {atom(), foo:bar()} when X :: atom().
+do_3(_, _) ->
   code_navigation:function_j().

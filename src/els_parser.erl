@@ -107,7 +107,7 @@ extra(Form, Tokens, Extra, attribute) ->
                                  ),
       maps:put(import_locations, NewLocations, Extra);
     {spec, {spec, {{F, A}, FTs}}} ->
-      SpecLocations = [spec_locations(FT) || FT <- FTs],
+      SpecLocations = [find_spec_points_of_interest(FT) || FT <- FTs],
       OldLocations  = maps:get(spec_locations, Extra, []),
       NewLocations  = [{{F, A}, lists:append(SpecLocations)} | OldLocations],
       maps:put(spec_locations, NewLocations, Extra);
@@ -117,34 +117,31 @@ extra(Form, Tokens, Extra, attribute) ->
 extra(_Form, _Tokens, Extra, _Type) ->
   Extra.
 
--spec spec_locations(tree()) -> [{atom(), erl_anno:location()}].
-spec_locations(FT) ->
-  case erl_syntax:type(FT) of
-    function_type ->
-      FTR = erl_syntax:function_type_return(FT),
-      FTA = erl_syntax:function_type_arguments(FT),
-      do_spec_locations([FTR | FTA], []);
-    constrained_function_type ->
-      %% TODO
-      []
-  end.
+%% @edoc Find points of interest in a spec attribute.
+-spec find_spec_points_of_interest(tree()) -> [any()].
+find_spec_points_of_interest(Tree) ->
+  erl_syntax_lib:fold(fun do_find_spec_points_of_interest/2, [], Tree).
 
--spec do_spec_locations([any()], [{atom(), erl_anno:location()}]) ->
-   [{atom(), erl_anno:location()}].
-do_spec_locations(any, Acc) ->
-  Acc;
-do_spec_locations([], Acc) ->
-  Acc;
-do_spec_locations([{type, StartLocation, Type, any}|T], Acc) ->
-  do_spec_locations(T, [{Type, StartLocation}|Acc]);
-do_spec_locations([{type, StartLocation, Type, Args}|T], Acc) ->
-  do_spec_locations(T ++ Args, [{Type, StartLocation}|Acc]);
-do_spec_locations([{user_type, StartLocation, Type, any}|T], Acc) ->
-  do_spec_locations(T, [{Type, StartLocation}|Acc]);
-do_spec_locations([{user_type, StartLocation, Type, Args}|T], Acc) ->
-  do_spec_locations(T ++ Args, [{Type, StartLocation}|Acc]);
-do_spec_locations([_Else|T], Acc) ->
-  do_spec_locations(T, Acc).
+%% TODO: Return pois instead
+-spec do_find_spec_points_of_interest(tree(), [any()]) -> [any()].
+do_find_spec_points_of_interest(Tree, Acc) ->
+  try erl_syntax:type(Tree) of
+      type_application ->
+        case Tree of
+          {remote_type, StartLocation, Type, _Args} ->
+            [{F, StartLocation}|Acc];
+          {type, StartLocation, Type, _Args} ->
+            [{F, StartLocation}|Acc];
+          {user_type, StartLocation, Type, _Args} ->
+            [{F, StartLocation}|Acc];
+          _ ->
+            Acc
+        end;
+      _ ->
+        Acc
+  catch _:_ ->
+      Acc
+  end.
 
 -spec tmp_path() -> binary().
 tmp_path() ->
@@ -260,25 +257,26 @@ attribute(Tree, Extra) ->
       case {Name, erl_syntax:attribute_arguments(Tree)} of
         {define, [Define|_]} ->
           [els_poi:new( Tree
-                            , define
-                            , define_name(Define)
-                            , Extra )];
+                      , define
+                      , define_name(Define)
+                      , Extra )];
         {include, [String]} ->
           [els_poi:new( Tree
-                            , include
-                            , erl_syntax:string_value(String)
-                            , Extra )];
+                      , include
+                      , erl_syntax:string_value(String)
+                      , Extra )];
         {include_lib, [String]} ->
           [els_poi:new( Tree
-                            , include_lib
-                            , erl_syntax:string_value(String)
-                            , Extra )];
+                      , include_lib
+                      , erl_syntax:string_value(String)
+                      , Extra )];
         _ ->
           []
       end;
     {record, {Record, _Fields}} ->
       [els_poi:new(Tree, record, atom_to_list(Record), Extra)];
     {spec, {spec, {{F, A}, _}}} ->
+      %% TODO: Need some changes?
       SpecLocations = maps:get(spec_locations, Extra, []),
       Locations     = proplists:get_value({F, A}, SpecLocations),
       [ els_poi:new(Tree, spec, {{F, A}, Tree}, Extra)
@@ -286,6 +284,8 @@ attribute(Tree, Extra) ->
          || {T, L} <- Locations]
       ];
     {type, {type, Type}} ->
+      %% TODO: Other types? e.g. remote_type, user_type?
+      %% TODO: Include module in name?
       %% TODO: Support type usages in type definitions
       TypeName = element(1, Type),
       [els_poi:new(Tree, type_definition, TypeName, Extra)];
